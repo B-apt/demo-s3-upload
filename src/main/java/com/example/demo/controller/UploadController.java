@@ -26,7 +26,7 @@ public class UploadController {
 
     private final Environment env;
 
-    @PostMapping(value = "/upload", produces = MediaType.TEXT_PLAIN_VALUE)
+    @PostMapping(value = "/upload", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<Void> upload() {
         FileContext fileContext = FileContext.builder()
             .filePath(this.getFilePath())

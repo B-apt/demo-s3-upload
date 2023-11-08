@@ -3,8 +3,11 @@ package com.example.demo.service;
 import static com.example.demo.config.ConcurrencyStaticConfig.FLATMAP_UPLOAD_CONCURRENCY;
 import static com.example.demo.utils.S3Utils.buildUploadMetadata;
 import static com.example.demo.utils.S3Utils.checkS3Response;
+import static reactor.core.publisher.SignalType.CANCEL;
+import static reactor.core.publisher.SignalType.ON_ERROR;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.core.env.Environment;
@@ -102,7 +105,7 @@ public class UploadService {
                         .fromPublisher(dataBufferToByteBufferFluxWithClose(dataBuffer)));
 
         return Mono.fromFuture(uploadPartRequestFuture)
-            .doFinally(signalType -> releaseDataBuffer(dataBuffer, signalType))
+            .doFinally(signalType -> unsafeReleaseDataBuffer(dataBuffer, signalType))
             .flatMap(uploadPartResult -> {
                 LOGGER.info("Upload part complete: part={}, etag={}", partNumber,
                     uploadPartResult.eTag());
@@ -117,16 +120,22 @@ public class UploadService {
 
     private static void releaseDataBuffer(final DataBuffer dataBuffer,
         final SignalType signalType) {
-//        if (signalType.equals(CANCEL) || signalType.equals(ON_ERROR)) {
-//            Mono.delay(Duration.ofSeconds(5))
-//                .doOnNext(unused -> {
-//                    LOGGER.info("releaseDataBuffer() waited 5sec for release of the dataBuffer");
-//                    DataBufferUtils.release(dataBuffer);
-//                }).subscribe();
-//        } else {
+        if (signalType.equals(CANCEL) || signalType.equals(ON_ERROR)) {
+            Mono.delay(Duration.ofSeconds(5))
+                .doOnNext(unused -> {
+                    LOGGER.info("releaseDataBuffer() waited 5sec for release of the dataBuffer");
+                    DataBufferUtils.release(dataBuffer);
+                }).subscribe();
+        } else {
             LOGGER.info("releaseDataBuffer() releasing NOW dataBuffer");
             DataBufferUtils.release(dataBuffer);
-//        }
+        }
+    }
+
+    private static void unsafeReleaseDataBuffer(final DataBuffer dataBuffer,
+        final SignalType signalType) {
+        LOGGER.info("releaseDataBuffer() releasing NOW dataBuffer");
+        DataBufferUtils.release(dataBuffer);
     }
 
     private static Flux<ByteBuffer> dataBufferToByteBufferFluxWithClose(DataBuffer dataBuffer) {
